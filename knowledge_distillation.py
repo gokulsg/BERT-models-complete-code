@@ -18,7 +18,7 @@ raw_datasets = load_dataset('glue', 'sst2')
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(device)
 
-# Name for the repository on the huggingface hub #
+## Name for the repository on the huggingface hub ##
 repo_name = "bert-tiny-sst2-KD-BERT"
 
 ## Teacher model: https://huggingface.co/gokuls/bert-base-sst2 ##
@@ -31,7 +31,7 @@ teacher_tokenizer = AutoTokenizer.from_pretrained(teacher_id)
 student_tokenizer = AutoTokenizer.from_pretrained(student_id)
 
 # sample input #
-sample = "Testing tokenizers."
+sample = "Testing if the tokenizers produce the same output."
 
 # Sanity check #
 print('Teacher tokenizer: ', teacher_tokenizer(sample))
@@ -87,7 +87,7 @@ class DistillationTrainer(Trainer):
         loss = self.args.alpha * student_loss + (1. - self.args.alpha) * loss_logits
         return (loss, outputs_student) if return_outputs else loss
       
-# create label2id, id2label dicts #
+## create label2id, id2label dicts ##
 labels = tokenized_datasets["train"].features["labels"].names
 num_labels = len(labels)
 label2id, id2label = dict(), dict()
@@ -95,7 +95,7 @@ for i, label in enumerate(labels):
     label2id[label] = str(i)
     id2label[str(i)] = label
     
-# training args #
+## training args ##
 training_args = DistillationTrainingArguments(
     output_dir=repo_name,
     num_train_epochs=50,
@@ -122,3 +122,60 @@ training_args = DistillationTrainingArguments(
     alpha=0.5,
     temperature=3.0
     )
+
+## data_collator ##
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+# Teacher model #
+teacher_model = AutoModelForSequenceClassification.from_pretrained(
+    teacher_id,
+    num_labels=num_labels, 
+    id2label=id2label,
+    label2id=label2id,
+)
+
+## Student model ##
+student_model = AutoModelForSequenceClassification.from_pretrained(
+    student_id,
+    num_labels=num_labels, 
+    id2label=id2label,
+    label2id=label2id,
+)
+
+## Evaluation metric - Accuracy ##
+def compute_metrics(eval_preds):
+    metric_acc = evaluate.load("accuracy")
+    logits, labels = eval_preds
+    predictions = np.argmax(logits, axis=-1)
+    return metric_acc.compute(predictions=predictions, references=labels)
+
+## Trainer ##
+trainer = DistillationTrainer(
+    student_model,
+    training_args,
+    teacher_model=teacher_model,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+    data_collator=data_collator,
+    tokenizer=tokenizer,
+    compute_metrics=compute_metrics,
+    callbacks = [EarlyStoppingCallback(early_stopping_patience = 3)],
+)
+
+## Training ##
+trainer.train()
+
+## After the training the Best model will be used ##
+## Evaluate ##
+trainer.evaluate()
+
+
+## Saving the model on the hugging face hub ##
+## save best model, metrics and create model card ##
+trainer.create_model_card(model_name=training_args.hub_model_id)
+trainer.push_to_hub()
+
+## Link for the model webpage ##
+whoami = HfApi().whoami()
+username = whoami['name']
+print(f"Model webpage link: https://huggingface.co/{username}/{repo_name}")
