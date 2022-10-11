@@ -1,2 +1,2 @@
 # BERT-models-complete-code
-This repository contains the complete code for the BERT models implemented from scratch
+This repository contains code for fine-tuning, task-specific knowledge distillation, analyzing model (model size and processing time) and the BERT model implementations from scratch
