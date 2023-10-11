@@ -13,3 +13,10 @@ def NLG_metrics(predictions, references):
     results_bertscore = bertscore.compute(predictions=predictions, references=references, lang="en")
 
     return {"bleu":results_bleu, "rouge":results_rouge, "meteor":results_meteor, "bertscore": results_bertscore}
+
+## Example ##
+predictions = ["The cat is on the mat", "I am currently out of the office"]
+references = ["There is a cat on the mat", "I am currently not in the office"]
+
+results = NLG_metrics(predictions, references)
+print(results)
